@@ -3,10 +3,13 @@
 //
 
 #include "TCPConn.hpp"
+#include "html_parser.hpp"
+#include "server_worker.hpp"
 #include <iostream>
 #include <boost/bind.hpp>
 #include <fstream>
 #include <algorithm>
+#include <future>
 
 connection::conn_ptr connection::make_new(io_service& service) {
     conn_ptr val(new connection(service));
@@ -58,7 +61,7 @@ void connection::on_read(const connection::error_code& err, size_t transferred_b
 
 void connection::do_read() {
     async_read(sock_, buffer(msg_read),
-                transfer_at_least(32),
+               transfer_at_least(32),
 //               boost::bind(&connection::go_to_enter, shared_from_this(), _1, _2),
                boost::bind(&connection::on_read, shared_from_this(), _1, _2));
 }
@@ -93,77 +96,37 @@ void connection::process_data(const std::string& msg) {
         return;
     }
 
-    std::string first_line = "";
+    std::future<html_query> fut = std::async(std::launch::async, parse_data, msg);
+    auto val = fut.get();
 
-    for (const char &it : msg) {
-        if (it == '\n') {
-            break;
-        }
+    std::string type_of_request = val.type;
+    int value = -1;
 
-        first_line += it;
+    if (val.type == "GET") {
+        value = 1;
     }
 
-    std::stringstream ss(first_line);
-    std::string type_of_request;
-    ss >> type_of_request;
-
-    std::string query = "";
-    std::string current_word;
-
-    while (ss >> current_word) {
-        if (current_word == "HTTP/1.1") {
-            break;
-        }
-
-        query += current_word + ' ';
-    }
-
-    query.pop_back();
-    std::cout << type_of_request << '\n' << query << std::endl;
-
-    std::string file_name = "";
-    if (type_of_request == "GET") {
-        for (const char &it : query) {
-            if (it == '?') {
-                break;
-            }
-            file_name += it;
-        }
-    } else {
-        message = "Fuck your mom";
-        do_write();
-        return;
-    }
-
-    if (file_name == "/") {
-        file_name += "/index.html";
-    }
-
-    std::cout << "Message from " << get_ip() << ": " << msg << std::endl;
-    file_name = "/home/sielu" + file_name;
-
-    std::ifstream input_html(file_name);
+    std::string answer;
+    std::string str_file;
+    ret_type all_file = (val.parameters.size() == 0) ?
+                        server_worker::get("file", value)
+                        (std::unordered_map {
+                            std::pair<std::string, std::string>("name", val.url)}) :
+                        server_worker::get(val.url, value)(val.parameters);
 
 
-    std::string answer = "";
-
-    std::string all_file = "";
-    if (input_html.good()) {
-        std::string line;
+    if (all_file.has_value()) {
         answer = "HTTP/1.1 200 OK\r\n";
-
-        while (input_html >> line) {
-            all_file += line + ' ';
-        }
-        all_file.pop_back();
+        str_file = std::move(all_file.value());
     } else {
-        answer = "HTTP/1.1 404 NOT FOUND";
-        all_file += "<p> 404 not FOUND Error </p>";
+        answer = "HTTP/1.1 404 NOT FOUND\r\n";
+        str_file = "<html> <body> <h1> 404 not found error </h1> </body> </html>";
     }
 
 
-    answer += "Content-Length: " + std::to_string(all_file.size()) + "\r\n\r\n" + all_file;
+    answer += "Content-Length: " + std::to_string(str_file.size()) + "\r\n\r\n" + str_file;
     message = std::move(answer);
 
+//    std::cout << -12 << std::endl;
     do_write();
 }
