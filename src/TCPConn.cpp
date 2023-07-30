@@ -43,20 +43,23 @@ std::string connection::get_ip() {
         return "Bad request";
     }
 
-//    while (!sock_.available());
-
     return sock_.remote_endpoint().address().to_string();
 }
 
 void connection::on_read(const connection::error_code& err, size_t transferred_bytes) {
     if (err) {
         process_data("");
-//        stop();
+        stop();
         return;
     }
 
     std::string msg(msg_read, transferred_bytes);
-    process_data(msg);
+    auto self(shared_from_this());
+    auto fut = std::async([&self, &msg]() {
+        self->process_data(msg);
+    });
+
+    fut.wait();
 }
 
 void connection::do_read() {
@@ -82,7 +85,8 @@ void connection::on_write(const connection::error_code& err, size_t transferred_
         return;
     }
 
-    do_read();
+    stop();
+//    do_read();
 }
 
 void connection::do_write() {
@@ -97,6 +101,7 @@ void connection::process_data(const std::string& msg) {
     }
 
     std::future<html_query> fut = std::async(std::launch::async, parse_data, msg);
+    fut.wait();
     auto val = fut.get();
 
     std::string type_of_request = val.type;
@@ -108,11 +113,21 @@ void connection::process_data(const std::string& msg) {
 
     std::string answer;
     std::string str_file;
-    ret_type all_file = (val.parameters.size() == 0) ?
-                        server_worker::get("file", value)
-                        (std::unordered_map {
-                            std::pair<std::string, std::string>("name", val.url)}) :
-                        server_worker::get(val.url, value)(val.parameters);
+
+    auto f = std::async(std::launch::async, [&val, &value] () {
+        val.parameters.insert({"name", val.url});
+//    for (auto &it : val.parameters) {
+//        std::cout << it.first << ' ' << it.second << std::endl;
+//    }
+
+        return (val.parameters.size() == 1) ?
+               server_worker::get("file", value)
+                       (val.parameters) :
+               server_worker::get(val.url, value)(val.parameters);
+    });
+    f.wait();
+//
+    ret_type all_file = f.get();
 
 
     if (all_file.has_value()) {
@@ -127,6 +142,5 @@ void connection::process_data(const std::string& msg) {
     answer += "Content-Length: " + std::to_string(str_file.size()) + "\r\n\r\n" + str_file;
     message = std::move(answer);
 
-//    std::cout << -12 << std::endl;
     do_write();
 }

@@ -53,14 +53,31 @@ inline ret_type get_input(std::unordered_map<std::string, std::string> val) {
 
     hashmap param;
 
-    for (auto &it : val) {
-        param[it.first] = it.second;
+    vec df;
+
+    if (val.count("repeat") == 0) {
+        val["repeat"] = "1";
     }
+
+//    std::cout << 42 << std::endl;
+//    std::cout << val["repeat"] << std::endl;
+
+    for (int i = 0; i < stoi(val["repeat"]); i++) {
+//        std::cout << i << std::endl;
+        df.emplace_back(i);
+    }
+
+    param["f"] = std::move(df);
 
 
     jinger::jinger file(name);
 
-    auto answer = file.parse_file(param);
+    auto fut = std::async(std::launch::async, [&file, &param] () {
+        return file.parse_file(param);
+    });
+
+
+    auto answer = std::move(fut.get());
 
     if (answer.has_value()) {
         return answer.value();
@@ -71,15 +88,9 @@ inline ret_type get_input(std::unordered_map<std::string, std::string> val) {
 
 int main() {
     server_worker::add_function("file", GET, get_input);
-//
-//    auto val = server_worker::get("file", GET)(std::unordered_map<std::string, std::string> {
-//        std::pair<std::string, std::string> {"name", "/inex.html"}
-//    });
-//
-//    std::cout << val.value_or("-12") << std::endl;
-//    return 0;
+    server_worker::add_function("/index.html", GET, get_input);
 
     io_service service;
-    auto wrapper = singleton_server::get_instance(service, 8001);
-    wrapper->get_server().start();
+    tcp_server server(service, 8001);
+    server.start();
 }

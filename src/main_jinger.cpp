@@ -4,11 +4,16 @@
 
 int main() {
     hashmap mapa;
-    mapa["f"] = vec {1, 2, 3, 4, "ab"};
-    mapa["i"] = "20.5";
+    vec val_1 {};
 
-    jinger jing;
-    jing.open("/home/sielu/input.txt");
+    for (int i = 0; i < 1e3; i++) {
+        val_1.push_back(i);
+    }
+
+    mapa["f"] = val_1;
+
+    jinger::jinger jing;
+    jing.open("/home/sielu/index.html");
     auto val = jing.parse_file(mapa);
 
     std::cout << val.value_or(val.error()) << std::endl;

@@ -16,6 +16,7 @@ endif()
 
 add_compile_options(-fsanitize=address)
 add_compile_options(-fsanitize=undefined)
+add_compile_options(-O3)
 add_link_options(-fsanitize=address)
 add_link_options(-fsanitize=undefined)
 

@@ -86,6 +86,8 @@ namespace jinger {
 
         std::ifstream input(file_name);
 
+//        std::cout << 42 << std::endl;
+//        std::cout << file_name << std::endl;
         while (!input.eof()) {
             getline(input, current_line);
             std::string current_word = "";
@@ -98,6 +100,8 @@ namespace jinger {
 
             all_words.push_back("\n");
         }
+
+//        std::cout << 42 << std::endl;
 
         std::vector<int> value;
         std::vector<size_t> pair_position(all_words.size(), -1);
@@ -197,7 +201,7 @@ namespace jinger {
                     for (auto &it: val) {
                         map[val_name] = it;
 
-                        auto val = parse_string(i + 6, all_position[i + 1] - 1, all_words, all_position, map);
+                        auto val = parse_string(i + 6, all_position[i + 1], all_words, all_position, map);
                         if (!val.has_value()) {
                             return err(val.error());
                         }
